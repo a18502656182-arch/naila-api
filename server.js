@@ -32,8 +32,11 @@ function mount(name) {
 
 mount("me");
 mount("clips");
+app.all("/rsc-api/clips", (req, res) => require("./rsc-api/clips.js")(req, res));
+app.all("/rsc-api/taxonomies", (req, res) => require("./rsc-api/taxonomies.js")(req, res));
 
 app.get("/", (req, res) => res.send("naila-api ok"));
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log("API listening on", port));
+
