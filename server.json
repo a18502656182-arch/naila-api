@@ -1,0 +1,107 @@
+import express from "express";
+import cors from "cors";
+import { createClient } from "@supabase/supabase-js";
+
+const app = express();
+app.use(express.json());
+
+// ====== 1) CORS：允许你的前端域名访问（非常关键）======
+// 先写死两个域名：你的主站 + Vercel 临时域名
+// 如果你还有别的域名，后面再加进去
+const ALLOW_ORIGINS = [
+  "https://www.nailaobao.top",
+  "https://nailaobao.top",
+  "https://naila-clips-eo9w.vercel.app"
+];
+
+app.use(
+  cors({
+    origin: function (origin, cb) {
+      // 允许无 origin（比如 Postman / curl）
+      if (!origin) return cb(null, true);
+      if (ALLOW_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error("CORS blocked: " + origin));
+    },
+    credentials: false,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "OPTIONS"]
+  })
+);
+
+// ====== 2) Supabase（用 Service Role）======
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Missing env: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+// ====== 3) 解析 Bearer token（从 Authorization 里取）======
+function getBearerToken(req) {
+  const h = req.headers.authorization || "";
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1] : null;
+}
+
+// ====== 4) /api/me：验证 token 是否有效 ======
+app.get("/api/me", async (req, res) => {
+  try {
+    const token = getBearerToken(req);
+    if (!token) return res.status(401).json({ ok: false, error: "missing_token" });
+
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) {
+      return res.status(401).json({ ok: false, error: "invalid_token" });
+    }
+
+    const u = data.user;
+    return res.json({
+      ok: true,
+      user: {
+        id: u.id,
+        email: u.email
+      }
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// ====== 5) /api/clips：先做最小版本（直接查 clips_view）=====
+// 说明：我们先做“能跑通”的版本，后面再按你原来的逻辑完全等价迁移。
+// 你现在最重要是把 Railway 的链路打通：域名 / CORS / token / 访问 Supabase
+app.get("/api/clips", async (req, res) => {
+  try {
+    // 这里先不强制登录（与你现有逻辑可能不同）
+    // 后续“等价迁移”时，我们会把 can_access / 会员逻辑完整搬过来
+
+    const offset = parseInt(req.query.offset || "0", 10);
+    const limit = parseInt(req.query.limit || "12", 10);
+
+    const { data, error } = await supabaseAdmin
+      .from("clips_view")
+      .select("*")
+      .order("id", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) return res.status(500).json({ ok: false, error: error.message });
+
+    return res.json({
+      ok: true,
+      items: data || [],
+      offset,
+      limit
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+app.get("/", (req, res) => res.send("naila-api ok"));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log("API listening on port", port);
+});
