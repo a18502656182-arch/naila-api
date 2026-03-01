@@ -1,3 +1,4 @@
+// server.js（稳定版：任何路由文件缺失也不会导致服务崩溃）
 const express = require("express");
 const cors = require("cors");
 
@@ -22,25 +23,56 @@ app.use(
     methods: ["GET", "POST", "OPTIONS"],
   })
 );
-app.options("*", cors());
 
-// 挂载 Next API 迁移版
-function mount(name) {
-  const handler = require(`./api/${name}.js`);
-  app.all(`/api/${name}`, (req, res) => handler(req, res));
-}
-
-mount("me");
-mount("clips");
-mount("bookmarks_list_ids");
-mount("bookmarks_add");
-mount("bookmarks_delete");
-app.all("/rsc-api/clips", (req, res) => require("./rsc-api/clips.js")(req, res));
-app.all("/rsc-api/taxonomies", (req, res) => require("./rsc-api/taxonomies.js")(req, res));
+// ✅ 预检永远成功（不再 502）
+app.options("*", (req, res) => res.sendStatus(204));
 
 app.get("/", (req, res) => res.send("naila-api ok"));
 
+// ✅ /api/* 挂载：请求时才 require，不会启动就崩
+function mountApi(name) {
+  app.all(`/api/${name}`, async (req, res) => {
+    try {
+      const handler = require(`./api/${name}.js`);
+      return handler(req, res);
+    } catch (e) {
+      return res.status(500).json({
+        error: "handler_load_failed",
+        route: `/api/${name}`,
+        detail: String(e?.message || e),
+      });
+    }
+  });
+}
+
+// ✅ /rsc-api/* 挂载：请求时才 require
+function mountRsc(route, file) {
+  app.all(route, async (req, res) => {
+    try {
+      const handler = require(file);
+      return handler(req, res);
+    } catch (e) {
+      return res.status(500).json({
+        error: "handler_load_failed",
+        route,
+        file,
+        detail: String(e?.message || e),
+      });
+    }
+  });
+}
+
+// —— 只挂你“确实已经创建了文件”的这些 ——
+// api
+mountApi("me");
+mountApi("clips");
+mountApi("bookmarks_list_ids");
+mountApi("bookmarks_add");
+mountApi("bookmarks_delete");
+
+// rsc-api
+mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
+mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log("API listening on", port));
-
-
