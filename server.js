@@ -70,6 +70,11 @@ mountApi("bookmarks_list_ids");
 mountApi("bookmarks_add");
 mountApi("bookmarks_delete");
 mountApi("bookmarks");
+mountApi("clip_full");
+mountApi("bookmarks_has");
+mountApi("vocab_fav_add");
+mountApi("vocab_fav_delete");
+mountApi("vocab_favorites");
 
 // rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
@@ -77,4 +82,5 @@ mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log("API listening on", port));
+
 
