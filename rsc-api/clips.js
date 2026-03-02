@@ -73,6 +73,8 @@ module.exports = async function handler(req, res) {
     } else {
       // 无 access 筛选（公开内容）开启边缘缓存
       res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+      // ✅ 关键：去掉 Origin，否则 Fastly 会把 Origin 当缓存 key，导致永远 MISS
+      res.setHeader("Vary", "Accept-Encoding");
     }
 
     return res.json({
