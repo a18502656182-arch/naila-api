@@ -10,7 +10,7 @@ const ALLOW_ORIGINS = [
   "https://www.nailaobao.top",
   "https://nailaobao.top",
   "https://naila-clips-eo9w.vercel.app",
-  "https://naila-clips.vercel.app/",
+  "https://naila-clips.vercel.app",
   
 ];
 
@@ -85,6 +85,7 @@ mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log("API listening on", port));
+
 
 
 
