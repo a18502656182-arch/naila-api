@@ -6,6 +6,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 const ALLOW_ORIGINS = [
+  "https://naila-clips1.vercel.app",
   "https://www.nailaobao.top",
   "https://nailaobao.top",
   "https://naila-clips-eo9w.vercel.app",
@@ -82,5 +83,6 @@ mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log("API listening on", port));
+
 
 
