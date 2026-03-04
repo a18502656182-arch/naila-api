@@ -26,7 +26,7 @@ module.exports = async function handler(req, res) {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const { data: items, error } = await admin.from("vocab_favorites")
-      .select("id, term, clip_id, kind, data, created_at")
+      .select("id, term, clip_id, kind, data, mastery_level, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
