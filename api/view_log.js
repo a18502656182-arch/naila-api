@@ -1,5 +1,5 @@
-// pages/api/view_log.js
-import { createClient } from "@supabase/supabase-js";
+// api/view_log.js
+const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -11,7 +11,7 @@ function getBearer(req) {
   return m ? m[1].trim() : null;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "method_not_allowed" });
 
   const token = getBearer(req);
@@ -39,4 +39,4 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ error: String(e?.message || e) });
   }
-}
+};
