@@ -65,7 +65,7 @@ function mountRsc(route, file) {
   });
 }
 
-// —— 只挂你“确实已经创建了文件”的这些 ——
+// —— 只挂你"确实已经创建了文件"的这些 ——
 // api
 mountApi("me");
 mountApi("clips");
@@ -81,8 +81,7 @@ mountApi("vocab_favorites");
 mountApi("vocab_update_mastery");
 mountApi("view_log");
 mountApi("journal_stats");
-mountApi("register");
-mountApi("redeem");
+mountApi("game_scores");  // 新增
 
 // rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
@@ -90,6 +89,3 @@ mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log("API listening on", port));
-
-
-
