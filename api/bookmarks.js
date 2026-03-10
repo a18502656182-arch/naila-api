@@ -1,5 +1,4 @@
 // api/bookmarks.js (CommonJS for Railway/Node)
-// 返回当前用户收藏的视频列表，包含完整视频信息
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,21 +28,34 @@ module.exports = async function handler(req, res) {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-    // 查收藏记录，同时 join clips_view 获取视频信息
-    const { data: rows, error } = await admin
+    // 第一步：查收藏记录
+    const { data: rows, error: rowsError } = await admin
       .from("bookmarks")
-      .select("id, clip_id, created_at, clips_view(id, title, cover_url, duration_sec, access_tier)")
+      .select("id, clip_id, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    if (error) return res.status(500).json({ error: "query_failed", detail: error.message });
+    if (rowsError) return res.status(500).json({ error: "bookmarks_query_failed", detail: rowsError.message });
+
+    const clipIds = (rows || []).map(r => r.clip_id).filter(Boolean);
+
+    // 第二步：批量查视频信息
+    let clipMap = {};
+    if (clipIds.length > 0) {
+      const { data: clips, error: clipsError } = await admin
+        .from("clips_view")
+        .select("id, title, cover_url, duration_sec, access_tier")
+        .in("id", clipIds);
+      if (clipsError) return res.status(500).json({ error: "clips_query_failed", detail: clipsError.message });
+      (clips || []).forEach(c => { clipMap[c.id] = c; });
+    }
 
     const items = (rows || []).map(r => ({
       bookmark_id: r.id,
       clip_id: r.clip_id,
       created_at: r.created_at,
-      clip: r.clips_view || null,
+      clip: clipMap[r.clip_id] || null,
     }));
 
     return res.status(200).json({ ok: true, items });
