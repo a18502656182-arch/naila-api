@@ -78,6 +78,8 @@ mountApi("vocab_update_mastery");
 mountApi("view_log");
 mountApi("journal_stats");
 mountApi("game_scores");
+mountApi("redeem");
+mountApi("register");
 
 // rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
