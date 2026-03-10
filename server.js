@@ -1,23 +1,20 @@
 // server.js（稳定版：任何路由文件缺失也不会导致服务崩溃）
 const express = require("express");
 const cors = require("cors");
-
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 const ALLOW_ORIGINS = [
-  "https://naila-clips1.vercel.app",
   "https://www.nailaobao.top",
   "https://nailaobao.top",
-  "https://naila-clips-eo9w.vercel.app",
-  "https://naila-clips.vercel.app",
-  
 ];
 
 app.use(
   cors({
     origin: function (origin, cb) {
       if (!origin) return cb(null, true);
+      // 允许所有 vercel.app 子域名（覆盖所有预览和生产部署）
+      if (/\.vercel\.app$/.test(origin)) return cb(null, true);
       if (ALLOW_ORIGINS.includes(origin)) return cb(null, true);
       return cb(new Error("CORS blocked: " + origin));
     },
@@ -29,7 +26,6 @@ app.use(
 
 // ✅ 预检永远成功（不再 502）
 app.options("*", (req, res) => res.sendStatus(204));
-
 app.get("/", (req, res) => res.send("naila-api ok"));
 
 // ✅ /api/* 挂载：请求时才 require，不会启动就崩
@@ -81,7 +77,7 @@ mountApi("vocab_favorites");
 mountApi("vocab_update_mastery");
 mountApi("view_log");
 mountApi("journal_stats");
-mountApi("game_scores");  // 新增
+mountApi("game_scores");
 
 // rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
