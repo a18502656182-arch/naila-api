@@ -5,6 +5,15 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABAS
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// imagedelivery.net 在国内被墙，转成 Vercel 反代路径 /cf-img/...
+function proxyCoverUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("https://imagedelivery.net")) {
+    return "/cf-img" + url.slice("https://imagedelivery.net".length);
+  }
+  return url;
+}
+
 function parseList(v) {
   if (!v) return [];
   if (Array.isArray(v)) v = v.join(",");
@@ -229,7 +238,7 @@ module.exports = async function handler(req, res) {
           created_at: row.created_at,
           upload_time: row.upload_time ?? null,
           access_tier: row.access_tier,
-          cover_url: row.cover_url ?? null,
+          cover_url: proxyCoverUrl(row.cover_url),
           video_url: row.video_url ?? null,
           difficulty: diff,
           topics,
