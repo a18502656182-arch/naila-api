@@ -14,6 +14,12 @@ function proxyCoverUrl(url) {
   return url;
 }
 
+// 视频 m3u8 通过后端反代，解决运营商拦截问题
+function proxyVideoUrl(url) {
+  if (!url) return null;
+  return `/api/proxy_video?url=${encodeURIComponent(url)}`;
+}
+
 function parseList(v) {
   if (!v) return [];
   if (Array.isArray(v)) v = v.join(",");
@@ -239,7 +245,7 @@ module.exports = async function handler(req, res) {
           upload_time: row.upload_time ?? null,
           access_tier: row.access_tier,
           cover_url: proxyCoverUrl(row.cover_url),
-          video_url: row.video_url ?? null,
+          video_url: proxyVideoUrl(row.video_url),
           difficulty: diff,
           topics,
           channels,
