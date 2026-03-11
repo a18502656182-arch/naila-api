@@ -80,6 +80,8 @@ mountApi("journal_stats");
 mountApi("game_scores");
 mountApi("redeem");
 mountApi("register");
+mountApi("dictation_upsert");
+mountApi("dictation_list");
 
 // rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
