@@ -11,6 +11,12 @@ function getBearer(req) {
   return m ? m[1].trim() : null;
 }
 
+const API_BASE = process.env.API_BASE || "";
+function proxyVideoUrl(url) {
+  if (!url) return null;
+  return `/api/proxy_video?url=${encodeURIComponent(url)}`;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   if (req.method !== "GET") return res.status(405).json({ error: "method_not_allowed" });
@@ -62,7 +68,7 @@ module.exports = async function handler(req, res) {
       item: {
         id: clip.id, title: clip.title, description: clip.description,
         duration_sec: clip.duration_sec, access_tier: clip.access_tier,
-        cover_url: clip.cover_url, video_url: clip.video_url,
+        cover_url: clip.cover_url, video_url: proxyVideoUrl(clip.video_url),
         created_at: clip.created_at, difficulty_slug: clip.difficulty_slug || null,
         topic_slugs: clip.topic_slugs || [], channel_slugs: clip.channel_slugs || [],
         can_access,
