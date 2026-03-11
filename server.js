@@ -83,6 +83,9 @@ mountApi("register");
 mountApi("dictation_upsert");
 mountApi("dictation_list");
 mountApi("proxy_video");
+mountApi("recording_save");
+mountApi("recording_list");
+mountApi("recording_delete");
 
 // rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
