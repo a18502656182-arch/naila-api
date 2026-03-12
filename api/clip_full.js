@@ -12,6 +12,16 @@ function getBearer(req) {
 }
 
 const API_BASE = process.env.API_BASE || "";
+
+// imagedelivery.net 在国内被墙，转成反代路径 /cf-img/...
+function proxyCoverUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("https://imagedelivery.net")) {
+    return "/cf-img" + url.slice("https://imagedelivery.net".length);
+  }
+  return url;
+}
+
 function proxyVideoUrl(url) {
   if (!url) return null;
   return `/api/proxy_video?url=${encodeURIComponent(url)}`;
@@ -68,7 +78,7 @@ module.exports = async function handler(req, res) {
       item: {
         id: clip.id, title: clip.title, description: clip.description,
         duration_sec: clip.duration_sec, access_tier: clip.access_tier,
-        cover_url: clip.cover_url, video_url: proxyVideoUrl(clip.video_url),
+        cover_url: proxyCoverUrl(clip.cover_url), video_url: proxyVideoUrl(clip.video_url),
         created_at: clip.created_at, difficulty_slug: clip.difficulty_slug || null,
         topic_slugs: clip.topic_slugs || [], channel_slugs: clip.channel_slugs || [],
         can_access,
