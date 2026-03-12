@@ -46,8 +46,8 @@ module.exports = async function handler(req, res) {
       user = data?.user || null;
     }
 
-    // 三个查询并行
-    const [clipResult, detailResult, subResult] = await Promise.all([
+    // 四个查询并行
+    const [clipResult, detailResult, subResult, bookmarkResult] = await Promise.all([
       admin.from("clips_view")
         .select("id,title,description,duration_sec,access_tier,cover_url,video_url,created_at,difficulty_slug,topic_slugs,channel_slugs")
         .eq("id", id).maybeSingle(),
@@ -58,6 +58,9 @@ module.exports = async function handler(req, res) {
             .gt("expires_at", new Date().toISOString())
             .order("expires_at", { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null }),
+      user?.id
+        ? admin.from("bookmarks").select("id").eq("user_id", user.id).eq("clip_id", id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (clipResult.error) return res.status(500).json({ error: "clip_query_failed", detail: clipResult.error.message });
@@ -67,6 +70,7 @@ module.exports = async function handler(req, res) {
     const subRow = subResult.data?.[0] || null;
     const is_member = !!subRow;
     const can_access = clip.access_tier === "free" ? true : is_member;
+    const bookmarked = !!bookmarkResult.data;
 
     let details_json = detailResult.data?.details_json ?? null;
     if (typeof details_json === "string") {
@@ -83,7 +87,7 @@ module.exports = async function handler(req, res) {
         topic_slugs: clip.topic_slugs || [], channel_slugs: clip.channel_slugs || [],
         can_access,
       },
-      me: { logged_in: !!user, is_member, plan: subRow?.plan || null, ends_at: subRow?.expires_at || null },
+      me: { logged_in: !!user, is_member, plan: subRow?.plan || null, ends_at: subRow?.expires_at || null, bookmarked },
       details_json,
     });
   } catch (e) {
