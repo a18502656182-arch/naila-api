@@ -2,7 +2,7 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "20mb" })); // 原来是 2mb，录音 base64 体积膨胀需要放大
 
 const ALLOW_ORIGINS = [
   "https://www.nailaobao.top",
@@ -13,7 +13,6 @@ app.use(
   cors({
     origin: function (origin, cb) {
       if (!origin) return cb(null, true);
-      // 允许所有 vercel.app 子域名（覆盖所有预览和生产部署）
       if (/\.vercel\.app$/.test(origin)) return cb(null, true);
       if (ALLOW_ORIGINS.includes(origin)) return cb(null, true);
       return cb(new Error("CORS blocked: " + origin));
@@ -24,11 +23,9 @@ app.use(
   })
 );
 
-// ✅ 预检永远成功（不再 502）
 app.options("*", (req, res) => res.sendStatus(204));
 app.get("/", (req, res) => res.send("naila-api ok"));
 
-// ✅ /api/* 挂载：请求时才 require，不会启动就崩
 function mountApi(name) {
   app.all(`/api/${name}`, async (req, res) => {
     try {
@@ -44,7 +41,6 @@ function mountApi(name) {
   });
 }
 
-// ✅ /rsc-api/* 挂载：请求时才 require
 function mountRsc(route, file) {
   app.all(route, async (req, res) => {
     try {
@@ -61,8 +57,6 @@ function mountRsc(route, file) {
   });
 }
 
-// —— 只挂你"确实已经创建了文件"的这些 ——
-// api
 mountApi("me");
 mountApi("clips");
 mountApi("bookmarks_list_ids");
@@ -87,7 +81,6 @@ mountApi("recording_save");
 mountApi("recording_list");
 mountApi("recording_delete");
 
-// rsc-api
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
 mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
 
