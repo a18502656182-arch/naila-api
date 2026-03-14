@@ -42,12 +42,11 @@ module.exports = async function handler(req, res) {
     const userId = payload.sub;
     const email = payload.email || null;
 
-    // 只做一次数据库查询
-    const { data: sub } = await admin
-      .from("subscriptions")
-      .select("status, plan, expires_at")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // 查询订阅 + 用户名
+    const [{ data: sub }, { data: profile }] = await Promise.all([
+      admin.from("subscriptions").select("status, plan, expires_at").eq("user_id", userId).maybeSingle(),
+      admin.from("profiles").select("username").eq("user_id", userId).maybeSingle(),
+    ]);
 
     const now = Date.now();
     const end_at = sub?.expires_at || null;
@@ -63,6 +62,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       logged_in: true,
       email,
+      username: profile?.username || null,
       user_id: userId,
       is_member,
       plan: sub?.plan || null,
