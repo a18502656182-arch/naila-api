@@ -1,4 +1,4 @@
-// pages/api/redeem.js
+// api/redeem.js
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -12,7 +12,9 @@ function getBearer(req) {
 }
 
 function calcNewExpiry(existingExpiresAt, days) {
-  const d = Number(days || 0);
+  const d = Number(days ?? 0);
+  // days=0 表示永久卡，expires_at 设为 null
+  if (d === 0) return null;
   const safeDays = Number.isFinite(d) && d > 0 ? d : 30;
   const msToAdd = safeDays * 24 * 60 * 60 * 1000;
   if (existingExpiresAt) {
@@ -65,6 +67,7 @@ module.exports = async function handler(req, res) {
       .eq("user_id", user.id)
       .maybeSingle();
 
+    // 永久卡：days=0 → new_expires_at=null；普通卡：在现有有效期上叠加
     const new_expires_at = calcNewExpiry(existingSub?.expires_at || null, rc.days);
 
     const { error: subErr } = await admin
