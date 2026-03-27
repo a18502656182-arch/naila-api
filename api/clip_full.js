@@ -13,7 +13,6 @@ function getBearer(req) {
 
 const API_BASE = process.env.API_BASE || "";
 
-// imagedelivery.net 在国内被墙，转成反代路径 /cf-img/...
 function proxyCoverUrl(url) {
   if (!url) return null;
   if (url.startsWith("https://imagedelivery.net")) {
@@ -37,7 +36,6 @@ module.exports = async function handler(req, res) {
   try {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-    // 获取用户（可选）
     let user = null;
     const token = getBearer(req);
     if (token) {
@@ -46,7 +44,6 @@ module.exports = async function handler(req, res) {
       user = data?.user || null;
     }
 
-    // 四个查询并行
     const [clipResult, detailResult, subResult, bookmarkResult] = await Promise.all([
       admin.from("clips_view")
         .select("id,title,description,duration_sec,access_tier,cover_url,video_url,created_at,difficulty_slug,topic_slugs,channel_slugs")
@@ -55,8 +52,9 @@ module.exports = async function handler(req, res) {
       user?.id
         ? admin.from("subscriptions").select("plan, expires_at, status")
             .eq("user_id", user.id).eq("status", "active")
-            .gt("expires_at", new Date().toISOString())
-            .order("expires_at", { ascending: false }).limit(1)
+            // 永久卡 expires_at 为 null，有效期卡 expires_at > now()，两种都算有效会员
+            .or("expires_at.is.null,expires_at.gt." + new Date().toISOString())
+            .order("expires_at", { ascending: false, nullsFirst: true }).limit(1)
         : Promise.resolve({ data: [], error: null }),
       user?.id
         ? admin.from("bookmarks").select("id").eq("user_id", user.id).eq("clip_id", id).maybeSingle()
