@@ -2,7 +2,7 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-app.use(express.json({ limit: "20mb" })); // 原来是 2mb，录音 base64 体积膨胀需要放大
+app.use(express.json({ limit: "20mb" }));
 
 const ALLOW_ORIGINS = [
   "https://www.nailaobao.top",
@@ -80,6 +80,11 @@ mountApi("proxy_video");
 mountApi("recording_save");
 mountApi("recording_list");
 mountApi("recording_delete");
+
+// ── 支付相关 ──
+mountApi("pay_create");
+mountApi("pay_notify");
+mountApi("pay_query");
 
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
 mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
