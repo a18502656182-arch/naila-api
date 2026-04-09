@@ -5,6 +5,14 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABAS
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+
+const CF_IMAGE_HOST = "https://imagedelivery.net";
+function proxyCoverUrl(url) {
+  if (!url) return null;
+  if (url.startsWith(CF_IMAGE_HOST)) return "/cf-img" + url.slice(CF_IMAGE_HOST.length);
+  return url;
+}
+
 function getBearer(req) {
   const h = req.headers.authorization || "";
   const m = h.match(/^Bearer\s+(.+)$/i);
@@ -48,7 +56,7 @@ module.exports = async function handler(req, res) {
         .select("id, title, cover_url, duration_sec, access_tier")
         .in("id", clipIds);
       if (clipsError) return res.status(500).json({ error: "clips_query_failed", detail: clipsError.message });
-      (clips || []).forEach(c => { clipMap[c.id] = c; });
+      (clips || []).forEach(c => { clipMap[c.id] = { ...c, cover_url: proxyCoverUrl(c.cover_url) }; });
     }
 
     const items = (rows || []).map(r => ({
