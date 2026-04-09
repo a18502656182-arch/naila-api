@@ -80,6 +80,12 @@ module.exports = async function handler(req, res) {
 
     await admin.from("redeem_codes").update({ used_count: used + 1 }).eq("code", code);
 
+    // 记录用户使用了哪个兑换码（用于订单管理追踪）
+    await admin.from("profiles").upsert(
+      { user_id: user.id, used_code: code },
+      { onConflict: "user_id" }
+    );
+
     return res.status(200).json({ ok: true, plan: rc.plan || "month", expires_at: new_expires_at });
   } catch (e) {
     return res.status(500).json({ error: "server_error", detail: String(e?.message || e) });
