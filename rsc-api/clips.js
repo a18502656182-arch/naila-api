@@ -1,4 +1,13 @@
 const { createClient } = require("@supabase/supabase-js");
+const CF_IMAGE_HOST = "https://imagedelivery.net";
+const CF_PROXY_PREFIX = "/cf-img";
+function proxyCoverUrl(url) {
+  if (!url) return null;
+  if (url.startsWith(CF_IMAGE_HOST)) return CF_PROXY_PREFIX + url.slice(CF_IMAGE_HOST.length);
+  return url;
+}
+
+
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -21,7 +30,7 @@ function normRow(r) {
     created_at: r.created_at,
     upload_time: r.upload_time ?? null,
     access_tier: r.access_tier,
-    cover_url: r.cover_url ? r.cover_url : null,
+    cover_url: proxyCoverUrl(r.cover_url),
     video_url: r.video_url ?? null,
     difficulty,
     topics,
