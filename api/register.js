@@ -89,6 +89,8 @@ module.exports = async function handler(req, res) {
     // 3) 写 profiles（记录 used_code）
     const profileRow = { user_id: userId, used_code: trimmedCode };
     if (username) profileRow.username = username;
+    // 试用卡：标记已使用，防止注册后再用试用卡叠加
+    if (rc.plan === "trial") profileRow.used_trial = true;
 
     const { error: profErr } = await admin.from("profiles").insert(profileRow);
     if (profErr) {
