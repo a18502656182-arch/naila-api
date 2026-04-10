@@ -92,19 +92,10 @@ module.exports = async function handler(req, res) {
 
     await admin.from("redeem_codes").update({ used_count: used + 1 }).eq("code", code);
 
-    // 试用卡：标记已使用
-    if (rc.plan === "trial") {
-      await admin.from("profiles").upsert(
-        { user_id: user.id, used_trial: true },
-        { onConflict: "user_id" }
-      );
-    }
-
-    // 记录用户使用了哪个兑换码（用于订单管理追踪）
-    await admin.from("profiles").upsert(
-      { user_id: user.id, used_code: code },
-      { onConflict: "user_id" }
-    );
+    // 记录兑换信息（used_code + 试用卡标记合并一次写入，避免二次 upsert 覆盖）
+    const profileUpdate = { user_id: user.id, used_code: code };
+    if (rc.plan === "trial") profileUpdate.used_trial = true;
+    await admin.from("profiles").upsert(profileUpdate, { onConflict: "user_id" });
 
     return res.status(200).json({ ok: true, plan: rc.plan || "month", expires_at: new_expires_at });
   } catch (e) {
