@@ -85,6 +85,7 @@ mountApi("recording_delete");
 mountApi("pay_create");
 mountApi("pay_notify");
 mountApi("pay_query");
+mountApi("site_config");
 
 mountRsc("/rsc-api/clips", "./rsc-api/clips.js");
 mountRsc("/rsc-api/taxonomies", "./rsc-api/taxonomies.js");
