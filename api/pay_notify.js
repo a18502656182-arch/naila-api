@@ -16,10 +16,8 @@ function zpaySign(params) {
 }
 
 module.exports = async function handler(req, res) {
-  // zpay 回调用 GET 或 POST，兼容两种
   const params = req.method === "POST" ? req.body : req.query;
-
-  const { trade_no, out_trade_no, trade_status, money, sign, pid } = params;
+  const { trade_no, out_trade_no, trade_status, money, sign } = params;
 
   // 1. 验证签名
   const paramsToSign = { ...params };
@@ -28,10 +26,10 @@ module.exports = async function handler(req, res) {
   const expectedSign = zpaySign(paramsToSign);
   if (sign !== expectedSign) {
     console.error("[pay_notify] 签名验证失败", { sign, expectedSign });
-    return res.status(200).send("fail"); // zpay 要求返回 fail 表示验证失败
+    return res.status(200).send("fail");
   }
 
-  // 2. 只处理支付成功的回调
+  // 2. 只处理支付成功
   if (trade_status !== "TRADE_SUCCESS") {
     return res.status(200).send("success");
   }
@@ -66,7 +64,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).send("fail");
   }
 
-  // 6. 激活兑换码
+  // 6. 激活兑换码（site 字段已在 pay_create 时写入，这里不用再改）
   const { error: activateErr } = await admin
     .from("redeem_codes")
     .update({ is_active: true })
@@ -82,9 +80,9 @@ module.exports = async function handler(req, res) {
     trade_no,
     redeem_code: order.redeem_code,
     plan: order.plan,
+    site: order.site,
     amount: money,
   });
 
-  // zpay 要求返回 success 表示处理成功
   return res.status(200).send("success");
 };
