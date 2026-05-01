@@ -7,6 +7,8 @@ app.use(express.json({ limit: "20mb" }));
 const ALLOW_ORIGINS = [
   "https://www.nailaobao.top",
   "https://nailaobao.top",
+  "https://www.dian-eng.top",
+  "https://dian-eng.top",
 ];
 
 app.use(
