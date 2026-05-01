@@ -13,8 +13,7 @@ function getBearer(req) {
 
 function calcNewExpiry(existingExpiresAt, days) {
   const d = Number(days ?? 0);
-  // days=0 表示永久卡，expires_at 设为 null
-  if (d === 0) return null;
+  if (d === 0) return null; // 永久卡
   const safeDays = Number.isFinite(d) && d > 0 ? d : 30;
   const msToAdd = safeDays * 24 * 60 * 60 * 1000;
   if (existingExpiresAt) {
@@ -45,7 +44,7 @@ module.exports = async function handler(req, res) {
 
     const { data: rc, error: rcErr } = await admin
       .from("redeem_codes")
-      .select("code, plan, days, max_uses, used_count, expires_at, is_active")
+      .select("code, plan, days, max_uses, used_count, expires_at, is_active, site")
       .eq("code", code)
       .maybeSingle();
 
@@ -61,7 +60,6 @@ module.exports = async function handler(req, res) {
     const max = Number(rc.max_uses || 0);
     if (max > 0 && used >= max) return res.status(400).json({ error: "code_used_up" });
 
-    // 试用卡限制：每个用户只能使用一次
     if (rc.plan === "trial") {
       const { data: profile } = await admin
         .from("profiles")
@@ -73,32 +71,36 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // 兑换码的 site 字段决定开哪个站的会员，默认 yt
+    const site = rc.site || "yt";
+
+    // 查该用户在对应 site 的现有订阅
     const { data: existingSub } = await admin
       .from("subscriptions")
       .select("expires_at, status")
       .eq("user_id", user.id)
+      .eq("site", site)
       .maybeSingle();
 
-    // 永久卡：days=0 → new_expires_at=null；普通卡：在现有有效期上叠加
     const new_expires_at = calcNewExpiry(existingSub?.expires_at || null, rc.days);
 
+    // upsert 时带上 site 字段，用 user_id+site 作为唯一标识
     const { error: subErr } = await admin
       .from("subscriptions")
       .upsert(
-        { user_id: user.id, status: "active", plan: rc.plan || "month", expires_at: new_expires_at },
-        { onConflict: "user_id" }
+        { user_id: user.id, status: "active", plan: rc.plan || "month", expires_at: new_expires_at, site },
+        { onConflict: "user_id,site" }
       );
     if (subErr) return res.status(500).json({ error: "subscription_upsert_failed", detail: subErr.message });
 
     await admin.from("redeem_codes").update({ used_count: used + 1 }).eq("code", code);
 
-    // 记录兑换信息（used_code + 试用卡标记合并一次写入，避免二次 upsert 覆盖）
     const profileUpdate = { user_id: user.id, used_code: code };
     if (rc.plan === "trial") profileUpdate.used_trial = true;
     await admin.from("profiles").upsert(profileUpdate, { onConflict: "user_id" });
 
-    return res.status(200).json({ ok: true, plan: rc.plan || "month", expires_at: new_expires_at });
+    return res.status(200).json({ ok: true, plan: rc.plan || "month", expires_at: new_expires_at, site });
   } catch (e) {
     return res.status(500).json({ error: "server_error", detail: String(e?.message || e) });
   }
-}
+};
