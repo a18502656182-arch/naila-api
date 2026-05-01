@@ -5,7 +5,6 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABAS
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// imagedelivery.net 在国内被墙，转成 Vercel 反代路径 /cf-img/...
 function proxyCoverUrl(url) {
   if (!url) return null;
   if (url.startsWith("https://imagedelivery.net")) {
@@ -14,7 +13,6 @@ function proxyCoverUrl(url) {
   return url;
 }
 
-// 视频 m3u8 通过后端反代，解决运营商拦截问题
 function proxyVideoUrl(url) {
   if (!url) return null;
   return `/api/proxy_video?url=${encodeURIComponent(url)}`;
@@ -23,10 +21,7 @@ function proxyVideoUrl(url) {
 function parseList(v) {
   if (!v) return [];
   if (Array.isArray(v)) v = v.join(",");
-  return String(v)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return String(v).split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 function getBearer(req) {
@@ -35,61 +30,27 @@ function getBearer(req) {
   return m ? m[1].trim() : null;
 }
 
-async function getUserFromBearer() {
-  // placeholder, actual implemented in handler with anon client
-}
-
-async function getMembership(admin, userId) {
+async function getMembership(admin, userId, site) {
   const now = Date.now();
 
-  const tryQuery = async (dateCol) => {
-    const { data, error } = await admin
-      .from("subscriptions")
-      .select(`status, plan, ${dateCol}`)
-      .eq("user_id", userId)
-      .order(dateCol, { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
-    return { data, error, dateCol };
-  };
+  // 按 site 查对应的订阅
+  const { data: sub, error } = await admin
+    .from("subscriptions")
+    .select("status, plan, expires_at")
+    .eq("user_id", userId)
+    .eq("site", site)
+    .maybeSingle();
 
-  let r = await tryQuery("ends_at");
-  if (
-    r.error &&
-    String(r.error.message || "").toLowerCase().includes("column") &&
-    String(r.error.message || "").includes("ends_at")
-  ) {
-    r = await tryQuery("expires_at");
-  }
+  if (error) return { is_member: false };
+  if (!sub || sub.status !== "active") return { is_member: false };
 
-  if (r.error) {
-    return {
-      is_member: false,
-      debug: { ok: false, reason: "query_error", message: r.error.message, used: r.dateCol },
-    };
-  }
-
-  const sub = r.data;
-  if (!sub) return { is_member: false, debug: { ok: false, reason: "no_subscription_row", used: r.dateCol } };
-
-  const status = sub.status ?? null;
-  const plan = sub.plan ?? null;
-  const end_at = sub[r.dateCol] ?? null;
-
-  let is_member = false;
-  if (status === "active") {
-    if (!end_at) is_member = true;
-    else {
-      const endMs = new Date(end_at).getTime();
-      if (!Number.isNaN(endMs) && endMs > now) is_member = true;
-    }
-  }
-
-  return { is_member, debug: { ok: true, used: r.dateCol, raw: { status, plan, end_at } } };
+  const end_at = sub.expires_at || null;
+  if (!end_at) return { is_member: true }; // 永久卡
+  const endMs = new Date(end_at).getTime();
+  return { is_member: !Number.isNaN(endMs) && endMs > now };
 }
 
 module.exports = async function handler(req, res) {
-  // ✅ 关键：永远不缓存 /api/clips（避免会员态被边缘缓存污染）
   res.setHeader("Cache-Control", "private, no-store, max-age=0");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -102,16 +63,25 @@ module.exports = async function handler(req, res) {
       auth: { persistSession: false },
     });
 
+    // site 参数：yt=油管，drama=美剧，不传=全部
+    const site = req.query.site || null; // null 表示不过滤
+
+    // 油管站筛选参数
     const difficulty = parseList(req.query.difficulty);
     const access = parseList(req.query.access);
     const topic = parseList(req.query.topic);
     const channel = parseList(req.query.channel);
 
+    // 美剧站筛选参数
+    const genre = req.query.genre || null;
+    const duration = req.query.duration || null;
+    const show = parseList(req.query.show);
+
     const sort = req.query.sort === "oldest" ? "oldest" : "newest";
     const limit = Math.min(Math.max(parseInt(req.query.limit || "12", 10), 1), 50);
     const offset = Math.max(parseInt(req.query.offset || "0", 10), 0);
 
-    // ====== 1) 解析 Bearer -> user ======
+    // ====== 1) 解析用户身份 ======
     const token = getBearer(req);
     let user = null;
     let userErr = null;
@@ -122,29 +92,27 @@ module.exports = async function handler(req, res) {
       userErr = r?.error || null;
     }
 
+    // 根据当前请求的 site 判断会员状态
     let is_member = false;
-    let sub_debug = { ok: false, reason: "not_logged_in" };
-
     if (user?.id && !userErr) {
-      const m = await getMembership(admin, user.id);
+      const effectiveSite = site || "yt"; // 不传 site 时默认用油管会员判断
+      const m = await getMembership(admin, user.id, effectiveSite);
       is_member = !!m.is_member;
-      sub_debug = m.debug;
     }
 
-    // ====== 2) 轻量候选集合：clips + clip_taxonomies + taxonomies ======
-    // 这里为了保持你原来的筛选语义（difficulty/topic/channel 都来自 clip_taxonomies），
-    // 我们拉取完整候选后在内存里做匹配，然后分页，再回查 fullRows。
+    // ====== 2) 拉取候选集合做筛选 ======
     let q = admin
       .from("clips")
       .select(
-        `
-        id, access_tier, created_at,
+        `id, access_tier, created_at,
         clip_taxonomies (
           taxonomies ( type, slug )
-        )
-      `
+        )`
       )
       .order("created_at", { ascending: sort === "oldest" });
+
+    // 按 site 过滤
+    if (site) q = q.eq("site", site);
 
     if (access.length) q = q.in("access_tier", access);
 
@@ -156,6 +124,9 @@ module.exports = async function handler(req, res) {
       const diff = all.find((t) => t.type === "difficulty")?.slug || null;
       const topics = all.filter((t) => t.type === "topic").map((t) => t.slug);
       const channels = all.filter((t) => t.type === "channel").map((t) => t.slug);
+      const genres = all.filter((t) => t.type === "genre").map((t) => t.slug);
+      const durations = all.filter((t) => t.type === "duration").map((t) => t.slug);
+      const shows = all.filter((t) => t.type === "show").map((t) => t.slug);
 
       return {
         id: row.id,
@@ -164,19 +135,21 @@ module.exports = async function handler(req, res) {
         difficulty: diff,
         topics,
         channels,
+        genres,
+        durations,
+        shows,
       };
     });
 
     function matches(clip) {
-      if (difficulty.length) {
-        if (!clip.difficulty || !difficulty.includes(clip.difficulty)) return false;
-      }
-      if (topic.length) {
-        if (!(clip.topics || []).some((t) => topic.includes(t))) return false;
-      }
-      if (channel.length) {
-        if (!(clip.channels || []).some((c) => channel.includes(c))) return false;
-      }
+      // 油管站筛选
+      if (difficulty.length && (!clip.difficulty || !difficulty.includes(clip.difficulty))) return false;
+      if (topic.length && !(clip.topics || []).some((t) => topic.includes(t))) return false;
+      if (channel.length && !(clip.channels || []).some((c) => channel.includes(c))) return false;
+      // 美剧站筛选
+      if (genre && !(clip.genres || []).includes(genre)) return false;
+      if (duration && !(clip.durations || []).includes(duration)) return false;
+      if (show.length && !(clip.shows || []).some((s) => show.includes(s))) return false;
       return true;
     }
 
@@ -188,35 +161,26 @@ module.exports = async function handler(req, res) {
 
     if (!pageIds.length) {
       return res.status(200).json({
-        debug: {
-          mode: "db_paged",
-          has_user: !!user?.id,
-          user_id: user?.id || null,
-          userErr: userErr?.message || null,
-          sub_debug,
-        },
         items: [],
         total,
         limit,
         offset,
         has_more,
         sort,
-        filters: { difficulty, access, topic, channel },
+        filters: { difficulty, access, topic, channel, genre, duration, show, site },
         is_member,
       });
     }
 
-    // ====== 3) 回查 fullRows（保持你原版返回字段结构）======
+    // ====== 3) 回查完整字段 ======
     const { data: fullRows, error: fullErr } = await admin
       .from("clips")
       .select(
-        `
-        id, title, description, duration_sec, created_at, upload_time,
-        access_tier, cover_url, video_url,
+        `id, title, description, duration_sec, created_at, upload_time,
+        access_tier, cover_url, video_url, site,
         clip_taxonomies(
           taxonomies(type, slug)
-        )
-      `
+        )`
       )
       .in("id", pageIds);
 
@@ -233,6 +197,9 @@ module.exports = async function handler(req, res) {
         const diff = all.find((t) => t.type === "difficulty")?.slug || null;
         const topics = all.filter((t) => t.type === "topic").map((t) => t.slug);
         const channels = all.filter((t) => t.type === "channel").map((t) => t.slug);
+        const genres = all.filter((t) => t.type === "genre").map((t) => t.slug);
+        const durations = all.filter((t) => t.type === "duration").map((t) => t.slug);
+        const shows = all.filter((t) => t.type === "show").map((t) => t.slug);
 
         const can_access = row.access_tier === "free" ? true : Boolean(is_member);
 
@@ -246,29 +213,26 @@ module.exports = async function handler(req, res) {
           access_tier: row.access_tier,
           cover_url: proxyCoverUrl(row.cover_url),
           video_url: proxyVideoUrl(row.video_url),
+          site: row.site || "yt",
           difficulty: diff,
           topics,
           channels,
+          genres,
+          durations,
+          shows,
           can_access,
         };
       })
       .filter(Boolean);
 
     return res.status(200).json({
-      debug: {
-        mode: "db_paged",
-        has_user: !!user?.id,
-        user_id: user?.id || null,
-        userErr: userErr?.message || null,
-        sub_debug,
-      },
       items,
       total,
       limit,
       offset,
       has_more,
       sort,
-      filters: { difficulty, access, topic, channel },
+      filters: { difficulty, access, topic, channel, genre, duration, show, site },
       is_member,
     });
   } catch (e) {
