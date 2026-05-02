@@ -122,8 +122,8 @@ module.exports = async function handler(req, res) {
         ok: true,
         needs_login: true,
         email: email,
-        plan: redeemed?.[0]?.plan ?? null,
-        expires_at: redeemed?.[0]?.expires_at ?? null,
+        plan: redeemed?.[0]?.out_plan ?? null,
+        expires_at: redeemed?.[0]?.out_expires_at ?? null,
       });
     }
 
@@ -133,8 +133,8 @@ module.exports = async function handler(req, res) {
       email: email,
       access_token: signed.session.access_token,
       refresh_token: signed.session.refresh_token,
-      expires_at: redeemed?.[0]?.expires_at !== undefined ? redeemed?.[0]?.expires_at : null,
-      plan: redeemed?.[0]?.plan ?? null,
+      expires_at: redeemed?.[0]?.out_expires_at !== undefined ? redeemed?.[0]?.out_expires_at : null,
+      plan: redeemed?.[0]?.out_plan ?? null,
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Unknown error" });
