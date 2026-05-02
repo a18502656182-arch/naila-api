@@ -71,25 +71,20 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // 兑换码的 site 字段决定开哪个站的会员，默认 yt
-    const site = rc.site || "yt";
-
-    // 查该用户在对应 site 的现有订阅
+    // 查该用户的现有订阅
     const { data: existingSub } = await admin
       .from("subscriptions")
       .select("expires_at, status")
       .eq("user_id", user.id)
-      .eq("site", site)
       .maybeSingle();
 
     const new_expires_at = calcNewExpiry(existingSub?.expires_at || null, rc.days);
 
-    // upsert 时带上 site 字段，用 user_id+site 作为唯一标识
     const { error: subErr } = await admin
       .from("subscriptions")
       .upsert(
-        { user_id: user.id, status: "active", plan: rc.plan || "month", expires_at: new_expires_at, site },
-        { onConflict: "user_id,site" }
+        { user_id: user.id, status: "active", plan: rc.plan || "month", expires_at: new_expires_at },
+        { onConflict: "user_id" }
       );
     if (subErr) return res.status(500).json({ error: "subscription_upsert_failed", detail: subErr.message });
 
@@ -99,7 +94,7 @@ module.exports = async function handler(req, res) {
     if (rc.plan === "trial") profileUpdate.used_trial = true;
     await admin.from("profiles").upsert(profileUpdate, { onConflict: "user_id" });
 
-    return res.status(200).json({ ok: true, plan: rc.plan || "month", expires_at: new_expires_at, site });
+    return res.status(200).json({ ok: true, plan: rc.plan || "month", expires_at: new_expires_at });
   } catch (e) {
     return res.status(500).json({ error: "server_error", detail: String(e?.message || e) });
   }
