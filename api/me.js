@@ -51,37 +51,22 @@ module.exports = async function handler(req, res) {
     const userId = payload.sub;
     const email = payload.email || null;
 
-    // 查油管站订阅（主库，按site=yt过滤）
-    const [{ data: subYt }, { data: profile }] = await Promise.all([
-      admin.from("subscriptions").select("status, plan, expires_at").eq("user_id", userId).eq("site", "yt").maybeSingle(),
+    const [{ data: sub }, { data: profile }] = await Promise.all([
+      admin.from("subscriptions").select("status, plan, expires_at").eq("user_id", userId).maybeSingle(),
       admin.from("profiles").select("username").eq("user_id", userId).maybeSingle(),
     ]);
-
-    // 查美剧站订阅（主库，按site=drama过滤）
-    const { data: subDrama } = await admin
-      .from("subscriptions")
-      .select("status, plan, expires_at")
-      .eq("user_id", userId)
-      .eq("site", "drama")
-      .maybeSingle();
-
-    const is_member_yt = calcIsMember(subYt);
-    const is_member_drama = calcIsMember(subDrama);
-
-    // is_member 兼容旧逻辑：油管站页面继续用这个字段
-    const is_member = is_member_yt;
-
+    const is_member = calcIsMember(sub);
     return res.status(200).json({
       logged_in: true,
       email,
       username: profile?.username || null,
       user_id: userId,
       is_member,
-      is_member_yt,
-      is_member_drama,
-      plan: subYt?.plan || null,
-      status: subYt?.status || null,
-      ends_at: subYt?.expires_at || null,
+      is_member_yt: is_member,
+      is_member_drama: is_member,
+      plan: sub?.plan || null,
+      status: sub?.status || null,
+      ends_at: sub?.expires_at || null,
     });
   } catch (e) {
     return res.status(500).json({ error: e?.message || "Unknown error" });
