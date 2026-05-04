@@ -11,7 +11,7 @@ const ZPAY_GATEWAY = "https://zpayz.cn/submit.php";
 const API_BASE_URL = process.env.API_BASE_URL || "https://railway.nailaobao.top";
 
 const PLANS = {
-  month:    { label: "月卡会员",  days: 30,  amount: "19.80" },
+  month:    { label: "月卡会员",  days: 30,  amount: "16.80" },
   quarter:  { label: "季卡会员",  days: 90,  amount: "38.80" },
   year:     { label: "年卡会员",  days: 365, amount: "66.80" },
   lifetime: { label: "永久会员",  days: 0,   amount: "168.80" },
