@@ -80,7 +80,26 @@ module.exports = async function handler(req, res) {
 
       const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
 
-      const rewritten = body.split("\n").map(line => {
+      // 过滤掉 1080p，只保留 720p 以下，节省 Egress 流量
+      // 策略：遇到 1080p 的 #EXT-X-STREAM-INF 行，连同下一行的 URI 一起跳过
+      const lines = body.split("\n");
+      const filteredLines = [];
+      let skipNext = false;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (skipNext) {
+          skipNext = false;
+          continue;
+        }
+        if (line.includes("RESOLUTION=1920x1080") || line.includes("RESOLUTION=2560x1440") || line.includes("RESOLUTION=3840x2160")) {
+          skipNext = true;
+          continue;
+        }
+        filteredLines.push(line);
+      }
+      const filteredBody = filteredLines.join("\n");
+
+      const rewritten = filteredBody.split("\n").map(line => {
         const trimmed = line.trim();
         if (!trimmed) return line;
 
